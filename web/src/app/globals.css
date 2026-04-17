@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+:root {
+  --background: #070708;
+  --foreground: #f4f4f5;
+  --muted: #a1a1aa;
+  --card: #0f0f12;
+  --card-border: rgba(255, 255, 255, 0.08);
+  --accent: #d4af37;
+  --accent-2: #f5d76e;
+  --accent-glow: rgba(212, 175, 55, 0.35);
+  --ring: rgba(212, 175, 55, 0.45);
+}
+
+html[data-accent="energy"] {
+  --accent: #3b82f6;
+  --accent-2: #fb923c;
+  --accent-glow: rgba(59, 130, 246, 0.35);
+  --ring: rgba(59, 130, 246, 0.45);
+}
+
+html.light {
+  --background: #fafafa;
+  --foreground: #18181b;
+  --muted: #52525b;
+  --card: #ffffff;
+  --card-border: rgba(24, 24, 27, 0.08);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+
+.gradient-mesh {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, var(--accent-glow), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, rgba(99, 102, 241, 0.12), transparent),
+    var(--background);
+}
+
+.hero-video-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.hero-video-wrap video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.45;
+}
+
+.glass {
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--card-border);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--accent) 35%, transparent) transparent;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    110deg,
+    transparent 0%,
+    color-mix(in oklab, var(--accent) 22%, transparent) 45%,
+    transparent 90%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.8s ease infinite;
+}
