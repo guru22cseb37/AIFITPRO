@@ -47,7 +47,7 @@ function StatPill({
   value,
   color,
 }: {
-  icon: React.ElementType;
+  icon: any;
   label: string;
   value: string;
   color: string;

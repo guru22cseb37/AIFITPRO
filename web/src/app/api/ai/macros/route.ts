@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { completeWithFallback } from "@/lib/ai/chat-orchestrator";
+import { completeWithFallback, type ChatMessage } from "@/lib/ai/chat-orchestrator";
 
 const SYSTEM_PROMPT = `You are an expert nutritionist AI. Your task is to estimate the macronutrients for food items provided by the user with 100% accuracy using standard USDA databases or equivalent common knowledge.
 Return ONLY a raw JSON object and nothing else. No markdown wrappers, no explanations. 
@@ -24,7 +24,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Food string is required" }, { status: 400 });
     }
 
-    const messages = [
+    const messages: ChatMessage[] = [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: `Estimate macros for: ${food}` },
     ];
