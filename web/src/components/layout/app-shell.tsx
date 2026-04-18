@@ -8,7 +8,7 @@ import {
   CalendarDays,
   Apple,
   LineChart,
-  Users,
+  Moon,
   Bot,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -19,7 +19,7 @@ const items = [
   { href: "/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/nutrition", label: "Nutrition", icon: Apple },
   { href: "/progress", label: "Progress", icon: LineChart },
-  { href: "/community", label: "Community", icon: Users },
+  { href: "/community", label: "Sleep", icon: Moon },
   { href: "/ai-coach", label: "AI Coach", icon: Bot },
 ];
 

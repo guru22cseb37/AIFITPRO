@@ -88,3 +88,13 @@ export interface DayWorkout {
   durationMin: number;
   exercises: ScheduledExercise[];
 }
+
+export interface SleepEntry {
+  id: string;
+  date: string;
+  hoursSlept: number;      // e.g. 7.5
+  sleepQuality: 1 | 2 | 3 | 4 | 5;   // 1=terrible, 5=excellent
+  energyLevel: 1 | 2 | 3 | 4 | 5;    // how you feel next morning
+  stressLevel: 1 | 2 | 3 | 4 | 5;    // 1=calm, 5=very stressed
+  notes?: string;
+}

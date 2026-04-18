@@ -9,6 +9,7 @@ export interface Recipe {
   difficulty: "Easy" | "Medium" | "Hard";
   diet: ("omnivore" | "vegetarian" | "vegan")[];
   ingredients: string[];
+  videoUrl?: string;
 }
 
 export const RECIPES: Recipe[] = [
@@ -23,6 +24,7 @@ export const RECIPES: Recipe[] = [
     difficulty: "Easy",
     diet: ["omnivore", "vegetarian"],
     ingredients: ["Greek yogurt 250g", "Mixed berries 120g", "Honey 10g", "Chia 10g"],
+    videoUrl: "https://www.youtube.com/embed/Zh0_uy9Jhvc",
   },
   {
     id: "r2",
@@ -35,6 +37,7 @@ export const RECIPES: Recipe[] = [
     difficulty: "Medium",
     diet: ["omnivore"],
     ingredients: ["Chicken breast 180g", "Quinoa 60g dry", "Cucumber", "Tomato", "Olive oil 10g", "Lemon"],
+    videoUrl: "https://www.youtube.com/embed/u4X7PBhsbac",
   },
   {
     id: "r3",
@@ -47,6 +50,7 @@ export const RECIPES: Recipe[] = [
     difficulty: "Easy",
     diet: ["vegan", "vegetarian"],
     ingredients: ["Firm tofu 200g", "Mixed veg 250g", "Soy sauce", "Ginger", "Garlic", "Rice 70g dry"],
+    videoUrl: "https://www.youtube.com/embed/UpCKEtS_1-Q",
   },
   {
     id: "r4",
@@ -59,6 +63,7 @@ export const RECIPES: Recipe[] = [
     difficulty: "Easy",
     diet: ["vegetarian", "omnivore"],
     ingredients: ["Rolled oats 60g", "Milk or soy 200ml", "Protein powder 25g", "Banana"],
+    videoUrl: "https://www.youtube.com/embed/j_ku8ZEJIrw",
   },
   {
     id: "r5",
@@ -71,5 +76,6 @@ export const RECIPES: Recipe[] = [
     difficulty: "Medium",
     diet: ["omnivore"],
     ingredients: ["Salmon 180g", "Sweet potato 250g", "Broccoli", "Olive oil", "Lemon"],
+    videoUrl: "https://www.youtube.com/embed/NWf_xUdAk7I",
   },
 ];

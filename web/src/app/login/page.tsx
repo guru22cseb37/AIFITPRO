@@ -17,10 +17,10 @@ export default function LoginPage() {
   const [err, setErr] = useState("");
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    const ok = login(email, password);
+    const ok = await login(email, password);
     if (!ok) {
       setErr("Invalid email or password. Register first or check credentials.");
       return;
@@ -39,7 +39,12 @@ export default function LoginPage() {
             <Input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           </label>
           <label className="block text-sm">
-            <span className="text-[var(--muted)]">Password</span>
+            <div className="flex justify-between">
+              <span className="text-[var(--muted)]">Password</span>
+              <Link href="/forgot-password" className="text-sm text-[var(--accent)] hover:underline">
+                Forgot password?
+              </Link>
+            </div>
             <Input
               type="password"
               required

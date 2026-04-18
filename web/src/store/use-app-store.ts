@@ -7,10 +7,12 @@ import type {
   FitnessLevel,
   MealLog,
   ProgressEntry,
+  SleepEntry,
   UserProfile,
   WorkoutLog,
 } from "@/types/index";
 import { computeBmi } from "@/lib/calculations";
+import { supabase } from "@/lib/supabase";
 
 export type ColorTheme = "midnight" | "energy";
 
@@ -19,12 +21,14 @@ interface AppState {
   setColorTheme: (t: ColorTheme) => void;
 
   user: UserProfile | null;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<boolean>;
   register: (
     data: Omit<UserProfile, "id" | "createdAt" | "lastLogin"> & { password: string },
-  ) => void;
-  logout: () => void;
-  updateProfile: (partial: Partial<UserProfile>) => void;
+  ) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
+  updateProfile: (partial: Partial<UserProfile>) => Promise<void>;
+  
+  loadInitialData: (userId: string) => Promise<void>;
 
   workoutLogs: WorkoutLog[];
   addWorkoutLog: (log: Omit<WorkoutLog, "id" | "userId" | "date"> & { date?: string }) => void;
@@ -49,6 +53,9 @@ interface AppState {
 
   prByExercise: Record<string, number>;
   updatePr: (exercise: string, weightKg: number) => void;
+
+  sleepLogs: SleepEntry[];
+  addSleepLog: (entry: Omit<SleepEntry, "id" | "date"> & { date?: string }) => void;
 }
 
 function todayISO(): string {
@@ -63,70 +70,178 @@ export const useAppStore = create<AppState>()(
 
       user: null,
 
-      login: (email, password) => {
-        const raw = localStorage.getItem("aifit-users");
-        if (!raw || !password) return false;
-        try {
-          const users = JSON.parse(raw) as Record<
-            string,
-            { profile: UserProfile; password: string }
-          >;
-          const u = users[email.toLowerCase()];
-          if (u && u.password === password) {
-            set({
-              user: { ...u.profile, lastLogin: new Date().toISOString() },
-            });
-            return true;
-          }
-        } catch {
+      login: async (email, password) => {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        
+        if (error || !data.user) {
           return false;
         }
+
+        // Fetch profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", data.user.id)
+          .single();
+
+        if (profile) {
+          const userObj: UserProfile = {
+            id: profile.id,
+            email: profile.email,
+            name: profile.name,
+            age: profile.age,
+            gender: profile.gender,
+            heightCm: Number(profile.height_cm),
+            weightKg: Number(profile.weight_kg),
+            goalWeightKg: profile.goal_weight_kg ? Number(profile.goal_weight_kg) : undefined,
+            fitnessLevel: profile.fitness_level,
+            goalType: profile.goal_type,
+            activity: profile.activity,
+            dietaryPreference: profile.dietary_preference,
+            allergies: profile.allergies || "",
+            budget: profile.budget,
+            createdAt: profile.created_at,
+            lastLogin: new Date().toISOString(),
+          };
+          set({ user: userObj });
+          
+          // Update last login in db
+          supabase.from("profiles").update({ last_login: new Date().toISOString() }).eq("id", profile.id).then();
+          
+          // Load all async data for this user
+          get().loadInitialData(profile.id);
+          return true;
+        }
+        
         return false;
       },
 
-      register: (data) => {
-        const id = crypto.randomUUID();
+      register: async (data) => {
+        // 1. Create auth user
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password,
+        });
+
+        if (authError || !authData.user) {
+          return { success: false, error: authError?.message || "Signup failed." };
+        }
+
         const now = new Date().toISOString();
-        const profile: UserProfile = {
-          id,
+        const profilePayload = {
+          id: authData.user.id,
           email: data.email,
           name: data.name,
           age: data.age,
           gender: data.gender,
-          heightCm: data.heightCm,
-          weightKg: data.weightKg,
-          goalWeightKg: data.goalWeightKg,
-          fitnessLevel: data.fitnessLevel,
-          goalType: data.goalType,
+          height_cm: data.heightCm,
+          weight_kg: data.weightKg,
+          goal_weight_kg: data.goalWeightKg,
+          fitness_level: data.fitnessLevel,
+          goal_type: data.goalType,
           activity: data.activity,
-          dietaryPreference: data.dietaryPreference,
-          allergies: data.allergies,
+          dietary_preference: data.dietaryPreference,
+          allergies: data.allergies ? [data.allergies] : [],
           budget: data.budget,
+          created_at: now,
+          last_login: now,
+        };
+
+        // 2. Insert into profiles table
+        const { error: profileError } = await supabase.from("profiles").insert([profilePayload]);
+        
+        if (profileError) {
+          console.error("Profile insertion error:", profileError.message || profileError, profileError.details, profileError.hint);
+          // If this is an RLS policy error or "new row violates row-level security policy", the user needs to disable email confirmations or fix RLS.
+          return { success: false, error: profileError.message || "Failed to create profile. Please check schema." };
+        }
+
+        const profile: UserProfile = {
+          id: authData.user.id,
+          ...data,
           createdAt: now,
           lastLogin: now,
         };
-        const raw = localStorage.getItem("aifit-users");
-        const users = raw ? (JSON.parse(raw) as Record<string, { profile: UserProfile; password: string }>) : {};
-        users[data.email.toLowerCase()] = { profile, password: data.password };
-        localStorage.setItem("aifit-users", JSON.stringify(users));
+
         set({ user: profile });
+        return { success: true };
       },
 
-      logout: () => set({ user: null }),
+      logout: async () => {
+        await supabase.auth.signOut();
+        set({ user: null, workoutLogs: [], mealLogs: [], progress: [], waterMlByDate: {}, badges: [], prByExercise: {} });
+      },
 
-      updateProfile: (partial) => {
+      updateProfile: async (partial) => {
         const u = get().user;
         if (!u) return;
+        
         const next = { ...u, ...partial };
         set({ user: next });
-        const raw = localStorage.getItem("aifit-users");
-        if (raw) {
-          const users = JSON.parse(raw) as Record<string, { profile: UserProfile; password: string }>;
-          const entry = users[u.email.toLowerCase()];
-          if (entry) {
-            entry.profile = next;
-            localStorage.setItem("aifit-users", JSON.stringify(users));
-          }
+        
+        // Push to supabase
+        const payload: any = {};
+        if (partial.name) payload.name = partial.name;
+        if (partial.weightKg) payload.weight_kg = partial.weightKg;
+        if (partial.goalWeightKg) payload.goal_weight_kg = partial.goalWeightKg;
+        
+        await supabase.from("profiles").update(payload).eq("id", u.id);
+      },
+      
+      loadInitialData: async (userId: string) => {
+        // Fetch Workouts
+        const { data: workouts } = await supabase.from("workout_logs").select("*").order('date', { ascending: false });
+        if (workouts) {
+          set({ workoutLogs: workouts.map(w => ({
+            id: w.id, userId: w.user_id, date: w.date, exerciseName: w.exercise_name,
+            sets: w.sets, reps: w.reps, weightKg: Number(w.weight_kg), durationMin: w.duration_min,
+            caloriesBurned: w.calories_burned, notes: w.notes
+          }))});
+        }
+        
+        // Fetch Meals
+        const { data: meals } = await supabase.from("meal_logs").select("*").order('date', { ascending: false });
+        if (meals) {
+          set({ mealLogs: meals.map(m => ({
+            id: m.id, userId: m.user_id, date: m.date, mealType: m.meal_type,
+            foodItems: m.food_items, calories: m.calories, proteinG: m.protein_g,
+            carbsG: m.carbs_g, fatG: m.fat_g
+          }))});
+        }
+        
+        // Fetch Progress
+        const { data: prog } = await supabase.from("progress_entries").select("*").order('date', { ascending: false });
+        if (prog) {
+          set({ progress: prog.map(p => ({
+            id: p.id, userId: p.user_id, date: p.date, weightKg: Number(p.weight_kg),
+            bodyFatPct: p.body_fat_pct ? Number(p.body_fat_pct) : undefined,
+            photoUrl: p.photo_url || undefined
+          }))});
+        }
+        
+        // Fetch Water
+        const { data: water } = await supabase.from("daily_water").select("*");
+        if (water) {
+          const wMap: Record<string, number> = {};
+          water.forEach(w => { wMap[w.date] = w.water_ml; });
+          set({ waterMlByDate: wMap });
+        }
+        
+        // Fetch Badges
+        const { data: badg } = await supabase.from("user_badges").select("*");
+        if (badg) {
+          set({ badges: badg.map(b => b.badge_id) });
+        }
+        
+        // Fetch PRs
+        const { data: prs } = await supabase.from("personal_records").select("*");
+        if (prs) {
+          const pMap: Record<string, number> = {};
+          prs.forEach(p => { pMap[p.exercise_name] = Number(p.weight_kg); });
+          set({ prByExercise: pMap });
         }
       },
 
@@ -134,10 +249,13 @@ export const useAppStore = create<AppState>()(
       addWorkoutLog: (log) => {
         const u = get().user;
         if (!u) return;
+        const id = crypto.randomUUID();
+        const date = log.date ?? todayISO();
+        
         const entry: WorkoutLog = {
-          id: crypto.randomUUID(),
+          id,
           userId: u.id,
-          date: log.date ?? todayISO(),
+          date,
           exerciseName: log.exerciseName,
           sets: log.sets,
           reps: log.reps,
@@ -146,18 +264,37 @@ export const useAppStore = create<AppState>()(
           caloriesBurned: log.caloriesBurned,
           notes: log.notes,
         };
+        
+        // Optimistic UI update
         set({ workoutLogs: [entry, ...get().workoutLogs] });
         get().updatePr(log.exerciseName, log.weightKg);
+        
+        // Push async to Supabase
+        supabase.from("workout_logs").insert([{
+          id,
+          user_id: u.id,
+          date,
+          exercise_name: log.exerciseName,
+          sets: log.sets,
+          reps: log.reps,
+          weight_kg: log.weightKg,
+          duration_min: log.durationMin,
+          calories_burned: log.caloriesBurned,
+          notes: log.notes
+        }]).then();
       },
 
       mealLogs: [],
       addMealLog: (meal) => {
         const u = get().user;
         if (!u) return;
+        const id = crypto.randomUUID();
+        const date = meal.date ?? todayISO();
+        
         const entry: MealLog = {
-          id: crypto.randomUUID(),
+          id,
           userId: u.id,
-          date: meal.date ?? todayISO(),
+          date,
           mealType: meal.mealType,
           foodItems: meal.foodItems,
           calories: meal.calories,
@@ -165,27 +302,55 @@ export const useAppStore = create<AppState>()(
           carbsG: meal.carbsG,
           fatG: meal.fatG,
         };
+        
         set({ mealLogs: [entry, ...get().mealLogs] });
+        
+        supabase.from("meal_logs").insert([{
+          id,
+          user_id: u.id,
+          date,
+          meal_type: meal.mealType,
+          food_items: meal.foodItems,
+          calories: meal.calories,
+          protein_g: meal.proteinG,
+          carbs_g: meal.carbsG,
+          fat_g: meal.fatG
+        }]).then();
       },
 
       updateMealLog: (id, patch) => {
         set({
           mealLogs: get().mealLogs.map((m) => (m.id === id ? { ...m, ...patch } : m)),
         });
+        
+        // Best effort sync
+        const payload: any = {};
+        if (patch.calories !== undefined) payload.calories = patch.calories;
+        if (patch.proteinG !== undefined) payload.protein_g = patch.proteinG;
+        if (patch.carbsG !== undefined) payload.carbs_g = patch.carbsG;
+        if (patch.fatG !== undefined) payload.fat_g = patch.fatG;
+        
+        if (Object.keys(payload).length > 0) {
+          supabase.from("meal_logs").update(payload).eq("id", id).then();
+        }
       },
 
       deleteMealLog: (id) => {
         set({ mealLogs: get().mealLogs.filter((m) => m.id !== id) });
+        supabase.from("meal_logs").delete().eq("id", id).then();
       },
 
       progress: [],
       addProgress: (p) => {
         const u = get().user;
         if (!u) return;
+        const id = crypto.randomUUID();
+        const date = p.date ?? todayISO();
+        
         const entry: ProgressEntry = {
-          id: crypto.randomUUID(),
+          id,
           userId: u.id,
-          date: p.date ?? todayISO(),
+          date,
           weightKg: p.weightKg,
           bodyFatPct: p.bodyFatPct,
           chestCm: p.chestCm,
@@ -197,13 +362,32 @@ export const useAppStore = create<AppState>()(
         };
         set({ progress: [entry, ...get().progress] });
         get().updateProfile({ weightKg: p.weightKg });
+        
+        supabase.from("progress_entries").insert([{
+          id,
+          user_id: u.id,
+          date,
+          weight_kg: p.weightKg,
+          body_fat_pct: p.bodyFatPct,
+          photo_url: p.photoUrl
+        }]).then();
       },
 
       waterMlByDate: {},
       addWater: (ml, date) => {
+        const u = get().user;
+        if (!u) return;
         const d = date ?? todayISO();
         const cur = get().waterMlByDate[d] ?? 0;
-        set({ waterMlByDate: { ...get().waterMlByDate, [d]: cur + ml } });
+        const newAmt = cur + ml;
+        
+        set({ waterMlByDate: { ...get().waterMlByDate, [d]: newAmt } });
+        
+        supabase.from("daily_water").upsert({
+          user_id: u.id,
+          date: d,
+          water_ml: newAmt
+        }, { onConflict: 'user_id, date' }).then();
       },
 
       streakDays: 0,
@@ -222,25 +406,47 @@ export const useAppStore = create<AppState>()(
           } else streak = 1;
         } else streak = 1;
         set({ streakDays: streak, lastWorkoutDate: t });
+        
         if (streak === 7) get().awardBadge("week-streak");
         if (streak === 30) get().awardBadge("month-streak");
       },
 
       badges: [],
       awardBadge: (id) => {
+        const u = get().user;
+        if (!u) return;
         if (get().badges.includes(id)) return;
+        
         set({ badges: [...get().badges, id] });
+        supabase.from("user_badges").insert([{ user_id: u.id, badge_id: id }]).then();
       },
 
       prByExercise: {},
       updatePr: (exercise, weightKg) => {
+        const u = get().user;
+        if (!u) return;
+        
         const prev = get().prByExercise[exercise] ?? 0;
         if (weightKg > prev) {
           set({
             prByExercise: { ...get().prByExercise, [exercise]: weightKg },
           });
           get().awardBadge("pr-chaser");
+          
+          supabase.from("personal_records").upsert({
+            user_id: u.id,
+            exercise_name: exercise,
+            weight_kg: weightKg
+          }, { onConflict: 'user_id, exercise_name' }).then();
         }
+      },
+
+      sleepLogs: [],
+      addSleepLog: (entry) => {
+        const id = crypto.randomUUID();
+        const date = entry.date ?? todayISO();
+        const newEntry: SleepEntry = { id, date, ...entry };
+        set({ sleepLogs: [newEntry, ...get().sleepLogs] });
       },
     }),
     {
@@ -257,6 +463,7 @@ export const useAppStore = create<AppState>()(
         lastWorkoutDate: s.lastWorkoutDate,
         badges: s.badges,
         prByExercise: s.prByExercise,
+        sleepLogs: s.sleepLogs,
       }),
     },
   ),

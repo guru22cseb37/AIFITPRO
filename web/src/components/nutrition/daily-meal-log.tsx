@@ -1,28 +1,26 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, Edit2, Pencil, Plus, Trash2, X, Sparkles, Loader2 } from "lucide-react";
 import type { MealLog, MealSlot } from "@/types/index";
 import type { GoalType } from "@/lib/calculations";
 import { macroSplit } from "@/lib/calculations";
-import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/store/use-app-store";
+import { cn } from "@/lib/utils";
 
-const SLOTS: { key: MealSlot; label: string; description: string }[] = [
-  { key: "morning", label: "Morning", description: "Breakfast & early meals" },
-  { key: "afternoon", label: "Afternoon", description: "Lunch & midday" },
-  { key: "evening", label: "Evening", description: "Late afternoon / pre-dinner" },
-  { key: "snack", label: "Snacks", description: "Anytime snacks" },
-  { key: "dinner", label: "Dinner", description: "Main evening meal" },
+const SLOTS: { key: MealSlot; label: string; description: string; icon: string }[] = [
+  { key: "morning", label: "Breakfast", description: "Morning fuel", icon: "🍳" },
+  { key: "afternoon", label: "Lunch", description: "Midday energy", icon: "🥗" },
+  { key: "snack", label: "Snacks", description: "Quick bites", icon: "🍎" },
+  { key: "dinner", label: "Dinner", description: "Evening recovery", icon: "🍲" },
 ];
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/** Map stored types to one of the five display columns */
 export function normalizeMealSlot(mealType: MealLog["mealType"]): MealSlot {
   if (mealType === "breakfast") return "morning";
   if (mealType === "lunch") return "afternoon";
@@ -49,60 +47,35 @@ export function DailyMealLog({ targetKcal, goalType }: { targetKcal: number; goa
     return mealLogs.filter((m) => m.userId === user.id && m.date === logDate);
   }, [mealLogs, user, logDate]);
 
-  const consumed = dayMeals.reduce((a, m) => a + m.calories, 0);
-  const totalP = dayMeals.reduce((a, m) => a + m.proteinG, 0);
-  const totalC = dayMeals.reduce((a, m) => a + m.carbsG, 0);
-  const totalF = dayMeals.reduce((a, m) => a + m.fatG, 0);
-
-  const pct = targetKcal > 0 ? Math.min(100, (consumed / targetKcal) * 100) : 0;
-
   if (!user) {
     return (
-      <Card>
-        <CardHeader title="Food log" subtitle="Log in to track meals." />
-        <p className="text-sm text-[var(--muted)]">Sign in to save your daily meals to this device.</p>
-      </Card>
+      <div className="rounded-3xl border border-white/10 bg-zinc-950/60 p-8 text-center shadow-2xl backdrop-blur-xl">
+        <h3 className="text-xl font-semibold">Food Log</h3>
+        <p className="mt-2 text-sm text-[var(--muted)]">Sign in to start tracking your daily nutrition.</p>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader
-        title="Today’s food log"
-        subtitle="Log what you eat by time of day — calories and macros update your daily totals automatically."
-      />
-
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-2 text-sm">
-          <span className="text-[var(--muted)]">Date</span>
-          <Input
-            type="date"
-            className="w-auto min-w-[10rem]"
-            value={logDate}
-            max={todayISO()}
-            onChange={(e) => setLogDate(e.target.value)}
-          />
-        </label>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-bold tracking-tight">Today's Meals</h2>
+        <Input
+          type="date"
+          className="w-auto border-none bg-white/5 font-medium text-white shadow-inner"
+          value={logDate}
+          max={todayISO()}
+          onChange={(e) => setLogDate(e.target.value)}
+        />
       </div>
 
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-4">
-        <div>
-          <p className="text-4xl font-bold tabular-nums">{Math.round(consumed)}</p>
-          <p className="text-sm text-[var(--muted)]">
-            of {Math.round(targetKcal)} kcal • P {Math.round(totalP)}g • C {Math.round(totalC)}g • F {Math.round(totalF)}g
-          </p>
-        </div>
-        <div className="h-3 min-w-[120px] flex-1 rounded-full bg-white/10 sm:max-w-xs">
-          <div className="h-3 rounded-full bg-[var(--accent)] transition-all" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-
-      <div className="mt-6 space-y-8">
-        {SLOTS.map(({ key, label, description }) => (
+      <div className="grid gap-4">
+        {SLOTS.map(({ key, label, description, icon }) => (
           <MealSlotBlock
             key={key}
             label={label}
             description={description}
+            icon={icon}
             meals={dayMeals.filter((m) => normalizeMealSlot(m.mealType) === key)}
             goalType={goalType}
             onAdd={(data) =>
@@ -116,18 +89,19 @@ export function DailyMealLog({ targetKcal, goalType }: { targetKcal: number; goa
                 date: logDate,
               })
             }
-            onUpdate={(id, patch) => updateMeal(id, patch)}
-            onDelete={(id) => deleteMeal(id)}
+            onUpdate={updateMeal}
+            onDelete={deleteMeal}
           />
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
 
 function MealSlotBlock({
   label,
   description,
+  icon,
   meals,
   goalType,
   onAdd,
@@ -136,174 +110,192 @@ function MealSlotBlock({
 }: {
   label: string;
   description: string;
+  icon: string;
   meals: MealLog[];
   goalType: GoalType;
-  onAdd: (data: {
-    foodItems: string;
-    calories: number;
-    proteinG: number;
-    carbsG: number;
-    fatG: number;
-  }) => void;
+  onAdd: (data: { foodItems: string; calories: number; proteinG: number; carbsG: number; fatG: number }) => void;
   onUpdate: (id: string, patch: Partial<Omit<MealLog, "id" | "userId">>) => void;
   onDelete: (id: string) => void;
 }) {
+  const [isAdding, setIsAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isEstimating, setIsEstimating] = useState(false);
+
   const [food, setFood] = useState("");
   const [calStr, setCalStr] = useState("");
   const [pStr, setPStr] = useState("");
   const [cStr, setCStr] = useState("");
   const [fStr, setFStr] = useState("");
-  const [showMacros, setShowMacros] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
 
   const slotTotal = meals.reduce((a, m) => a + m.calories, 0);
-
-  function resetForm() {
-    setFood("");
-    setCalStr("");
-    setPStr("");
-    setCStr("");
-    setFStr("");
-    setShowMacros(false);
-  }
 
   function submitAdd() {
     const cal = parseNum(calStr);
     if (!food.trim() || cal === null || cal <= 0) return;
 
-    const pIn = parseNum(pStr);
-    const cIn = parseNum(cStr);
-    const fIn = parseNum(fStr);
-    const typedAnyMacro = pStr.trim() !== "" || cStr.trim() !== "" || fStr.trim() !== "";
+    let proteinG = parseNum(pStr);
+    let carbsG = parseNum(cStr);
+    let fatG = parseNum(fStr);
 
-    let proteinG: number;
-    let carbsG: number;
-    let fatG: number;
-
-    if (typedAnyMacro && pIn !== null && cIn !== null && fIn !== null) {
-      proteinG = pIn;
-      carbsG = cIn;
-      fatG = fIn;
-    } else {
+    if (proteinG === null || carbsG === null || fatG === null) {
       const split = macroSplit(cal, goalType);
       proteinG = split.proteinG;
       carbsG = split.carbsG;
       fatG = split.fatG;
     }
 
-    onAdd({
-      foodItems: food.trim(),
-      calories: cal,
-      proteinG,
-      carbsG,
-      fatG,
-    });
-    resetForm();
+    onAdd({ foodItems: food.trim(), calories: cal, proteinG, carbsG, fatG });
+    setFood("");
+    setCalStr("");
+    setPStr("");
+    setCStr("");
+    setFStr("");
+    setIsAdding(false);
+  }
+
+  async function estimateMacros() {
+    if (!food.trim()) return;
+    setIsEstimating(true);
+    try {
+      const res = await fetch("/api/ai/macros", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ food: food.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to estimate macros");
+      const data = await res.json();
+      setCalStr(String(Math.round(data.calories)));
+      setPStr(String(Math.round(data.proteinG)));
+      setCStr(String(Math.round(data.carbsG)));
+      setFStr(String(Math.round(data.fatG)));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to auto-estimate. Please try again.");
+    } finally {
+      setIsEstimating(false);
+    }
   }
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-zinc-950/30 p-4">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h3 className="font-semibold text-[var(--accent)]">{label}</h3>
-          <p className="text-xs text-[var(--muted)]">{description}</p>
+    <div className="overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/40 shadow-xl backdrop-blur-md transition-all hover:bg-zinc-950/60">
+      {/* Header */}
+      <div className="flex items-center justify-between p-5">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 text-2xl shadow-inner">
+            {icon}
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">{label}</h3>
+            <p className="text-xs text-[var(--muted)]">{description}</p>
+          </div>
         </div>
-        {meals.length > 0 ? (
-          <span className="text-sm tabular-nums text-zinc-400">
-            {Math.round(slotTotal)} kcal in this block
-          </span>
-        ) : null}
-      </div>
-
-      <ul className="mb-4 space-y-2">
-        {meals.map((m) => (
-          <li
-            key={m.id}
-            className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+        <div className="flex items-center gap-4">
+          {meals.length > 0 && (
+            <span className="text-lg font-black tracking-tight text-[var(--accent)] drop-shadow-[0_0_8px_var(--accent-glow)]">
+              {Math.round(slotTotal)} <span className="text-xs font-normal text-zinc-500">kcal</span>
+            </span>
+          )}
+          <button
+            onClick={() => setIsAdding(!isAdding)}
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-zinc-950 transition-transform hover:scale-110 hover:shadow-[0_0_15px_var(--accent-glow)] active:scale-95"
           >
-            {editingId === m.id ? (
-              <EditMealRow
-                meal={m}
-                goalType={goalType}
-                onSave={(patch) => {
-                  onUpdate(m.id, patch);
-                  setEditingId(null);
-                }}
-                onCancel={() => setEditingId(null)}
-              />
-            ) : (
-              <>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-zinc-100">{m.foodItems}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {Math.round(m.calories)} kcal • P {Math.round(m.proteinG)}g • C {Math.round(m.carbsG)}g • F{" "}
-                    {Math.round(m.fatG)}g
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setEditingId(m.id)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0 text-red-400" onClick={() => onDelete(m.id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </>
-            )}
-          </li>
-        ))}
-      </ul>
+            {isAdding ? <X className="h-5 w-5" /> : <Plus className="h-5 w-5" />}
+          </button>
+        </div>
+      </div>
 
-      <div className="space-y-2 rounded-xl border border-dashed border-white/15 p-3">
-        <p className="text-xs font-medium text-zinc-500">Add food for {label.toLowerCase()}</p>
-        <Input placeholder="What did you eat? (e.g. Oats, banana, coffee)" value={food} onChange={(e) => setFood(e.target.value)} />
-        <div className="grid gap-2 sm:grid-cols-2">
-          <label className="text-xs">
-            <span className="text-[var(--muted)]">Calories (kcal) *</span>
-            <Input inputMode="decimal" placeholder="e.g. 450" value={calStr} onChange={(e) => setCalStr(e.target.value)} />
-          </label>
-          <div className="flex items-end">
-            <Button type="button" size="sm" variant="secondary" className="w-full" onClick={() => setShowMacros((s) => !s)}>
-              {showMacros ? "Hide macros" : "Add protein / carbs / fat (optional)"}
-            </Button>
+      {/* Add Form */}
+      {isAdding && (
+        <div className="border-t border-white/5 bg-black/20 p-5">
+          <div className="flex flex-wrap gap-4 items-start">
+            <div className="flex min-w-[200px] flex-1 gap-2">
+              <Input
+                placeholder="What did you eat? (e.g. 2 dosas with dal)"
+                className="flex-1 border-white/10 bg-white/5 shadow-inner"
+                value={food}
+                onChange={(e) => setFood(e.target.value)}
+                autoFocus
+              />
+              <Button 
+                onClick={estimateMacros} 
+                disabled={!food.trim() || isEstimating}
+                className="shrink-0 bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:shadow-[0_0_15px_rgba(245,158,11,0.5)] transition-all px-3"
+              >
+                {isEstimating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
+                {isEstimating ? "Estimating..." : "AI Estimate"}
+              </Button>
+            </div>
+            
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Input
+                placeholder="Calories"
+                className="w-24 border-white/10 bg-white/5 text-center shadow-inner focus:border-[var(--accent)] transition-colors"
+                value={calStr}
+                onChange={(e) => setCalStr(e.target.value)}
+                inputMode="decimal"
+              />
+              <div className="flex shrink-0 gap-2">
+                <Input placeholder="P" className="w-14 border-white/10 bg-white/5 px-1 text-center shadow-inner focus:border-blue-500 transition-colors" value={pStr} onChange={(e) => setPStr(e.target.value)} />
+                <Input placeholder="C" className="w-14 border-white/10 bg-white/5 px-1 text-center shadow-inner focus:border-purple-500 transition-colors" value={cStr} onChange={(e) => setCStr(e.target.value)} />
+                <Input placeholder="F" className="w-14 border-white/10 bg-white/5 px-1 text-center shadow-inner focus:border-amber-500 transition-colors" value={fStr} onChange={(e) => setFStr(e.target.value)} />
+                <Button onClick={submitAdd} disabled={!food.trim() || !parseNum(calStr)} className="shrink-0 px-3">
+                  <Check className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-        {showMacros ? (
-          <div className="grid grid-cols-3 gap-2">
-            <label className="text-xs">
-              <span className="text-[var(--muted)]">Protein g</span>
-              <Input inputMode="decimal" placeholder="auto" value={pStr} onChange={(e) => setPStr(e.target.value)} />
-            </label>
-            <label className="text-xs">
-              <span className="text-[var(--muted)]">Carbs g</span>
-              <Input inputMode="decimal" placeholder="auto" value={cStr} onChange={(e) => setCStr(e.target.value)} />
-            </label>
-            <label className="text-xs">
-              <span className="text-[var(--muted)]">Fat g</span>
-              <Input inputMode="decimal" placeholder="auto" value={fStr} onChange={(e) => setFStr(e.target.value)} />
-            </label>
-          </div>
-        ) : null}
-        <Button type="button" className="w-full gap-2 sm:w-auto" onClick={submitAdd} disabled={!food.trim() || !parseNum(calStr)}>
-          <Plus className="h-4 w-4" />
-          Add to {label}
-        </Button>
-      </div>
-    </section>
+      )}
+
+      {/* Meal Items */}
+      {meals.length > 0 && (
+        <div className="border-t border-white/5 px-5 pb-5 pt-3">
+          <ul className="space-y-3">
+            {meals.map((m) => (
+              <li key={m.id} className="group flex items-center justify-between rounded-2xl bg-white/5 p-3 shadow-sm transition-all hover:bg-white/10">
+                {editingId === m.id ? (
+                  <EditMealRow
+                    meal={m}
+                    goalType={goalType}
+                    onSave={(patch: Partial<Omit<MealLog, "id" | "userId">>) => {
+                      onUpdate(m.id, patch);
+                      setEditingId(null);
+                    }}
+                    onCancel={() => setEditingId(null)}
+                  />
+                ) : (
+                  <>
+                    <div className="flex-1">
+                      <p className="font-semibold text-zinc-100">{m.foodItems}</p>
+                      <div className="mt-1 flex gap-3 text-xs font-medium text-zinc-400">
+                        <span><span className="text-zinc-500">P</span> {Math.round(m.proteinG)}g</span>
+                        <span><span className="text-zinc-500">C</span> {Math.round(m.carbsG)}g</span>
+                        <span><span className="text-zinc-500">F</span> {Math.round(m.fatG)}g</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-bold tabular-nums text-zinc-200">{Math.round(m.calories)} kcal</span>
+                      <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
+                        <button onClick={() => setEditingId(m.id)} className="p-2 text-zinc-400 hover:text-white">
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button onClick={() => onDelete(m.id)} className="p-2 text-red-400/70 hover:text-red-400">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   );
 }
 
-function EditMealRow({
-  meal,
-  goalType,
-  onSave,
-  onCancel,
-}: {
-  meal: MealLog;
-  goalType: GoalType;
-  onSave: (patch: Partial<Omit<MealLog, "id" | "userId">>) => void;
-  onCancel: () => void;
-}) {
+function EditMealRow({ meal, goalType, onSave, onCancel }: any) {
   const [food, setFood] = useState(meal.foodItems);
   const [calStr, setCalStr] = useState(String(meal.calories));
   const [pStr, setPStr] = useState(String(Math.round(meal.proteinG)));
@@ -322,31 +314,21 @@ function EditMealRow({
       carbsG = split.carbsG;
       fatG = split.fatG;
     }
-    onSave({
-      foodItems: food.trim(),
-      calories: cal,
-      proteinG,
-      carbsG,
-      fatG,
-    });
+    onSave({ foodItems: food.trim(), calories: cal, proteinG, carbsG, fatG });
   }
 
   return (
-    <div className="w-full space-y-2">
-      <Input value={food} onChange={(e) => setFood(e.target.value)} />
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Input placeholder="kcal" value={calStr} onChange={(e) => setCalStr(e.target.value)} />
-        <Input placeholder="P g" value={pStr} onChange={(e) => setPStr(e.target.value)} />
-        <Input placeholder="C g" value={cStr} onChange={(e) => setCStr(e.target.value)} />
-        <Input placeholder="F g" value={fStr} onChange={(e) => setFStr(e.target.value)} />
+    <div className="flex w-full flex-col gap-2 sm:flex-row">
+      <Input value={food} onChange={(e) => setFood(e.target.value)} className="flex-1 border-white/10 bg-black/40" />
+      <Input value={calStr} onChange={(e) => setCalStr(e.target.value)} className="w-20 border-white/10 bg-black/40 text-center" />
+      <div className="flex gap-1">
+        <Input value={pStr} onChange={(e) => setPStr(e.target.value)} className="w-14 border-white/10 bg-black/40 px-1 text-center" />
+        <Input value={cStr} onChange={(e) => setCStr(e.target.value)} className="w-14 border-white/10 bg-black/40 px-1 text-center" />
+        <Input value={fStr} onChange={(e) => setFStr(e.target.value)} className="w-14 border-white/10 bg-black/40 px-1 text-center" />
       </div>
-      <div className="flex gap-2">
-        <Button type="button" size="sm" onClick={save}>
-          Save
-        </Button>
-        <Button type="button" size="sm" variant="secondary" onClick={onCancel}>
-          Cancel
-        </Button>
+      <div className="flex gap-1">
+        <Button size="sm" onClick={save} className="h-11 px-3"><Check className="h-4 w-4" /></Button>
+        <Button size="sm" variant="secondary" onClick={onCancel} className="h-11 px-3"><X className="h-4 w-4" /></Button>
       </div>
     </div>
   );

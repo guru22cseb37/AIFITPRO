@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store/use-app-store";
+import { StreakBadge } from "@/components/gamification/streak-badge";
 
 const appLinks = [
   { href: "/dashboard", label: "Dashboard" },
@@ -16,7 +17,7 @@ const appLinks = [
   { href: "/schedule", label: "Schedule" },
   { href: "/nutrition", label: "Nutrition" },
   { href: "/progress", label: "Progress" },
-  { href: "/community", label: "Community" },
+  { href: "/community", label: "Sleep" },
   { href: "/ai-coach", label: "AI Coach" },
 ];
 
@@ -29,6 +30,7 @@ export function Navbar() {
   const logout = useAppStore((s) => s.logout);
   const colorTheme = useAppStore((s) => s.colorTheme);
   const setColorTheme = useAppStore((s) => s.setColorTheme);
+  const streakDays = useAppStore((s) => s.streakDays);
 
   useEffect(() => {
     setOpen(false);
@@ -107,6 +109,7 @@ export function Navbar() {
               >
                 Hi, {user.name.split(" ")[0]}
               </Link>
+              <StreakBadge days={streakDays} />
               <Button
                 type="button"
                 variant="ghost"

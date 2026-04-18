@@ -30,10 +30,15 @@ export default function RegisterPage() {
   const [dietaryPreference, setDietaryPreference] = useState<"omnivore" | "vegetarian" | "vegan">("omnivore");
   const [allergies, setAllergies] = useState("");
   const [budget, setBudget] = useState<"low" | "medium" | "high">("medium");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    register({
+    setErrorMsg("");
+    setIsSubmitting(true);
+    
+    const result = await register({
       email,
       password,
       name,
@@ -49,7 +54,14 @@ export default function RegisterPage() {
       allergies,
       budget,
     });
-    router.push("/onboarding");
+    
+    setIsSubmitting(false);
+
+    if (result.success) {
+      router.push("/onboarding");
+    } else {
+      setErrorMsg(result.error || "An unknown error occurred.");
+    }
   }
 
   return (
@@ -202,8 +214,10 @@ export default function RegisterPage() {
             <Input value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder="e.g. peanuts, dairy" />
           </label>
 
-          <Button type="submit" className="w-full" size="lg">
-            Complete registration
+          {errorMsg && <p className="text-sm text-red-400">{errorMsg}</p>}
+
+          <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+            {isSubmitting ? "Creating account..." : "Complete registration"}
           </Button>
         </form>
         <p className="mt-4 text-center text-sm text-[var(--muted)]">
